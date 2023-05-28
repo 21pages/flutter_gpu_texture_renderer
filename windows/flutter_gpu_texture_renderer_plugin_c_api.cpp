@@ -21,6 +21,6 @@ void FlutterGpuTextureRendererPluginCApiSetTexture(void *output, void *texture) 
     d3d11Output->SetTexture((ID3D11Texture2D*)texture);
 }
 
-void* FlutterGpuTextureRendererPluginCApiGetDevice() {
-  return flutter_gpu_texture_renderer::FlutterGpuTextureRendererPlugin::GetDevice();
+void* FlutterGpuTextureRendererPluginCApiCreateDevice() {
+  return flutter_gpu_texture_renderer::FlutterGpuTextureRendererPlugin::CreateDevice();
 }

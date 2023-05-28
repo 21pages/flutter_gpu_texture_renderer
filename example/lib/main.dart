@@ -25,10 +25,12 @@ class _MyAppState extends State<MyApp> with WindowListener {
   final _duplicationLib = NativeLibrary(DynamicLibrary.open("duplication.dll"));
   final _pluginLib = NativeLibrary(
       DynamicLibrary.open("flutter_gpu_texture_renderer_plugin.dll"));
+  Pointer<Void> device = Pointer.fromAddress(0);
   var _count = 1;
 
   @override
   void initState() {
+    device = _pluginLib.FlutterGpuTextureRendererPluginCApiCreateDevice();
     windowManager.addListener(this);
     super.initState();
   }
@@ -87,9 +89,11 @@ class _MyAppState extends State<MyApp> with WindowListener {
                 width: 2880,
                 height: 1800,
                 child: VideoOutput(
-                    plugin: _flutterGpuTextureRendererPlugin,
-                    pluginlib: _pluginLib,
-                    duplib: _duplicationLib),
+                  plugin: _flutterGpuTextureRendererPlugin,
+                  pluginlib: _pluginLib,
+                  duplib: _duplicationLib,
+                  device: device,
+                ),
               ),
             ),
           ),
@@ -103,11 +107,13 @@ class VideoOutput extends StatefulWidget {
   final FlutterGpuTextureRenderer plugin;
   final NativeLibrary pluginlib;
   final NativeLibrary duplib;
+  final Pointer<Void> device;
   const VideoOutput(
       {Key? key,
       required this.plugin,
       required this.pluginlib,
-      required this.duplib})
+      required this.duplib,
+      required this.device})
       : super(key: key);
 
   @override
@@ -116,9 +122,10 @@ class VideoOutput extends StatefulWidget {
 
 class _VideoOutputState extends State<VideoOutput> {
   int? _textureId;
-  get plugin => widget.plugin;
-  get pluginlib => widget.pluginlib;
-  get duplib => widget.duplib;
+  FlutterGpuTextureRenderer get plugin => widget.plugin;
+  NativeLibrary get pluginlib => widget.pluginlib;
+  NativeLibrary get duplib => widget.duplib;
+  Pointer<Void> get device => widget.device;
 
   @override
   void initState() {
@@ -128,14 +135,11 @@ class _VideoOutputState extends State<VideoOutput> {
 
   Future<void> initPlatformState() async {
     try {
-      _textureId = await widget.plugin.registerTexture();
+      _textureId = await plugin.registerTexture(device.address);
       if (_textureId != null) {
-        // final device = await plugin.device(_textureId!);
-        final device = pluginlib.FlutterGpuTextureRendererPluginCApiGetDevice();
         final output = await plugin.output(_textureId!);
         setState(() {});
-        if (device != null && output != null) {
-          // duplib.StartDuplicateThread(Pointer.fromAddress(device));
+        if (output != null) {
           duplib.StartDuplicateThread(device);
           duplib.AddOutput(Pointer.fromAddress(output));
         }

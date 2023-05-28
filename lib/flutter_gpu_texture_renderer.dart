@@ -1,8 +1,8 @@
 import 'flutter_gpu_texture_renderer_platform_interface.dart';
 
 class FlutterGpuTextureRenderer {
-  Future<int?> registerTexture() {
-    return FlutterGpuTextureRendererPlatform.instance.registerTexture();
+  Future<int?> registerTexture(int device) {
+    return FlutterGpuTextureRendererPlatform.instance.registerTexture(device);
   }
 
   Future<int?> unregisterTexture(int id) {
