@@ -1,7 +1,17 @@
 #include "d3d11_output.h"
+#include <iostream>
+
+#include <fstream>
 
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
+
+static void logfile(std::string s) {
+  std::ofstream myfile;
+  myfile.open ("D:/tmp/log.txt", std::ios_base::app);
+  myfile << s << "\n";
+  myfile.close();
+}
 
 #define MS_ENSURE(f, ...) MS_CHECK(f, return __VA_ARGS__;)
 #define MS_WARN(f) MS_CHECK(f)
@@ -9,6 +19,7 @@
   do {                                                                         \
     HRESULT __ms_hr__ = (f);                                                   \
     if (FAILED(__ms_hr__)) {                                                   \
+      logfile(#f "  ERROR@" + std::to_string(__LINE__) + " " + __FUNCTION__ + ": (" + std::to_string(__ms_hr__) + ") " + std::error_code(__ms_hr__, std::system_category()).message() + "\n"); \
       std::clog                                                                \
           << #f "  ERROR@" << __LINE__ << __FUNCTION__ << ": (" << std::hex    \
           << __ms_hr__ << std::dec << ") "                                     \
@@ -50,13 +61,18 @@ D3D11Output::~D3D11Output() {
 
 bool D3D11Output::SetTexture(void *texture) {
   if (unusable_) {
+    logfile("unusable_");
     return false;
   }
-  if (!texture)
+  if (!texture) {
+    logfile("texture is nullptr");
     return false;
+  }
 
-  if (!EnsureTexture((ID3D11Texture2D *)texture))
+  if (!EnsureTexture((ID3D11Texture2D *)texture)) {
+    logfile("EnsureTexture failed");
     return false;
+  }
 
   return Present();
 }
@@ -65,7 +81,7 @@ bool D3D11Output::SetTexture(void *texture) {
 bool D3D11Output::EnsureTexture(ID3D11Texture2D *texture) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (rendering_) {
-    std::cout << __FILE__ << " rendering: " << rendering_ << std::endl;
+    logfile("rendering: " + std::to_string(rendering_));
   }
   tex_ = texture;
   D3D11_TEXTURE2D_DESC desc;
@@ -73,13 +89,13 @@ bool D3D11Output::EnsureTexture(ID3D11Texture2D *texture) {
   ComPtr<ID3D11Device> dev = nullptr;
   tex_->GetDevice(dev.ReleaseAndGetAddressOf());
   if (!dev) {
-    std::cout << __FILE__ << " GetDevice failed" << std::endl;
+    logfile("GetDevice failed");
     return false;
   }
   if (dev_ != dev) {
     fail_counter_ = 0;
     if (dev_) {
-      std::cout << __FILE__ << " d3d11 device changed" << std::endl;
+      logfile("d3d11 device changed");
     }
     dev_ = dev;
     dev_->GetImmediateContext(ctx_.ReleaseAndGetAddressOf());
@@ -88,12 +104,12 @@ bool D3D11Output::EnsureTexture(ID3D11Texture2D *texture) {
   if (!desc_ready_ || surface_desc_->width != desc.Width ||
       surface_desc_->height != desc.Height) {
     if (fail_counter_ > 10) {
-      std::cout << __FILE__ << " fail_counter_ > 10" << std::endl;
+      logfile("fail_counter_ > 10");
       return false;
     }
     fail_counter_++;
     if (surface_desc_->width != 0)
-      std::cout << __FILE__ << " reset desc" << std::endl;
+      logfile("reset desc");
     MS_ENSURE(dev_->CreateTexture2D(&desc, nullptr,
                                     tex_buffers_.ReleaseAndGetAddressOf()),
               false);
@@ -110,7 +126,7 @@ bool D3D11Output::EnsureTexture(ID3D11Texture2D *texture) {
     surface_desc_->release_context = this;
     surface_desc_->release_callback = [](void *release_context) {
       D3D11Output *self = (D3D11Output *)release_context;
-      // self->SetFPS();
+      self->SetFPS();
       self->rendering_ = false;
     };
     desc_ready_ = true;
@@ -118,12 +134,17 @@ bool D3D11Output::EnsureTexture(ID3D11Texture2D *texture) {
   ctx_->CopyResource(tex_buffers_.Get(), tex_.Get());
   ctx_->Flush();
   fail_counter_ = 0;
+  logfile("EnsureTexture success");
 
   return true;
 }
 
 bool D3D11Output::Present() {
-  return texture_registrar_->MarkTextureFrameAvailable(texture_id_);
+  bool ret = texture_registrar_->MarkTextureFrameAvailable(texture_id_);
+  if (!ret) {
+    logfile("MarkTextureFrameAvailable failed");
+  }
+  return ret;
 }
 
 void D3D11Output::SetFPS() {
@@ -136,7 +157,6 @@ void D3D11Output::SetFPS() {
     fps_time_point_ = now;
     last_fps_.store(this_fps_);
     this_fps_ = 0;
-    // std::cout << "fps:" << (int)last_fps_.load() << std::endl;
   }
 }
 
